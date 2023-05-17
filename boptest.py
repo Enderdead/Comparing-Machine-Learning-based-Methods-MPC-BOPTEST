@@ -5,7 +5,9 @@ import requests
 import subprocess
 import random
 import time
+import numpy as np
 from contextlib import closing
+from fuzzywuzzy import process
 from project1_boptest.examples.python.controllers.controller import Controller
 from project1_boptest.examples.python.custom_kpi.custom_kpi_calculator import CustomKPI
 
@@ -15,9 +17,9 @@ def _find_free_port():
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
 
-def _get_all_scenarios():
-    scenario_list = os.listdir(os.path.join("project1_boptest", "testcases"))
-    return list(filter( lambda x: os.path.isdir(os.path.join("project1_boptest", "testcases", x)), scenario_list))
+def _get_all_testcases():
+    testcases_list = os.listdir(os.path.join("project1_boptest", "testcases"))
+    return list(filter( lambda x: os.path.isdir(os.path.join("project1_boptest", "testcases", x)), testcases_list))
 
 
 def _check_response(response):
@@ -57,11 +59,11 @@ def _try_function(function, max_attempts, delay):
 class Boptest:
     _DOCKER_IMAGE_NAME = "boptest_base_cmp"
 
-    def __init__(self, scenario_name, basename='127.0.0.1', port=None):
-        assert scenario_name in _get_all_scenarios()
+    def __init__(self, testcase_name, basename='127.0.0.1', port=None):
+        assert testcase_name in _get_all_testcases()
         
         self.port = _find_free_port() if port is None else port
-        self.scenario_name  = scenario_name
+        self.testcase_name  = testcase_name
 
         self.url = f"http://{basename}:{self.port}"
         self._random_tag = f"boptest_base_{random.randint(0,1000)}"
@@ -69,7 +71,6 @@ class Boptest:
         self._start_server()
 
         try:
-
             print("wait for connection.", end="", flush=True)
             _check_response(_try_function(lambda : requests.get(f"{self.url}/name"),5, 2.0))
             print("\nConnected to Boptest server", end="\n", flush=True)
@@ -78,14 +79,30 @@ class Boptest:
             print("Exiting!")
             sys.exit()
 
+        self.inputs_info = self.get_inputs_info()
+        self.available_input =  [x for x in list(self.inputs_info.keys()) if not x.endswith("_activate")]
+        self.available_measurements  = list(self.get_measurements_info().keys())
+        
+        self._mask_available_input = [process.extractOne(item, [x for x in list(self.inputs_info.keys()) if x.endswith("_activate")] )[0] for item in self.available_input]
+        self.activated_input = self.available_input 
+        self.activated_measurements = self.available_measurements
+
+    def set_activated_input(self, input_list: list) -> None:
+        assert np.all(np.array([x in self.available_input for x in input_list]))
+        self.activated_input = input_list
+
+    def set_activated_measurements(self, measurements_list: list) -> None:
+        assert np.all(np.array([x in self.available_measurements for x in measurements_list]))
+        self.available_measurements = measurements_list
+
     def _start_server(self):
         _run_command(f"docker build -t {Boptest._DOCKER_IMAGE_NAME} ./project1_boptest")
         _run_command(f"""docker run --name {self._random_tag} \
                         --network boptest-net \
                         -e APP_PATH='/home/developer' \
-                        -e TESTCASE='{self.scenario_name}'\
-                        -v $(pwd)/project1_boptest/testcases/{self.scenario_name}/models/wrapped.fmu:/home/developer/models/wrapped.fmu \
-                        -v $(pwd)/project1_boptest/testcases/{self.scenario_name}/doc/:/home/developer/doc/ \
+                        -e TESTCASE='{self.testcase_name}'\
+                        -v $(pwd)/project1_boptest/testcases/{self.testcase_name}/models/wrapped.fmu:/home/developer/models/wrapped.fmu \
+                        -v $(pwd)/project1_boptest/testcases/{self.testcase_name}/doc/:/home/developer/doc/ \
                         -v $(pwd)/project1_boptest/restapi.py:/home/developer/restapi.py \
                         -v $(pwd)/project1_boptest/testcase.py:/home/developer/testcase.py \
                         -v $(pwd)/project1_boptest/version.txt:/home/developer/version.txt \
@@ -101,9 +118,13 @@ class Boptest:
         name = _check_response(requests.get(f"{self.url}/name")) 
         return name["name"]
 
-    def get_input_list(self) -> dict:
+    def get_measurements_info(self) -> dict:
         measurements = _check_response(requests.get(f"{self.url}/measurements"))
         return measurements
+
+    def get_inputs_info(self) -> dict:
+        inputs = _check_response(requests.get(f"{self.url}/inputs"))
+        return inputs
 
     def get_timestep(self) -> float:
         step = _check_response(requests.get(f"{self.url}/step"))
@@ -114,11 +135,57 @@ class Boptest:
     
     def initialize(self, start_time: float=0.0, warmup_period: float=0.0):
         pass
+    
+    def set_scenario(self, electricity_price: str=None, time_period: str=None) -> None:
+        scenario_dict = {"electricity_price":electricity_price} if not electricity_price is None else  {}
+        if not time_period is None: scenario_dict["time_period"] = time_period 
+        _check_response(requests.put(f"{self.url}/scenario", json=scenario_dict))
+
+    def get_scenario(self) -> dict:
+        scenario_dict = _check_response(requests.get(f"{self.url}/scenario"))
+        return scenario_dict
+
+    def get_forcast_list(self) -> dict:
+        forcast_data = _check_response(requests.get(f"{self.url}/forecast_points"))
+        return forcast_data
+
+    def get_forcast(self, names, horizon:float, interval:float) -> np.array:
+        if isinstance(names, str):
+            names = [names,]
+        forcast_data = _check_response(requests.put(f"{self.url}/forecast", json={"point_names":names, "horizon":horizon, "interval": interval}))
+        result_array = np.array([])
+        for name in names:
+            result_array = np.concatenate([result_array, np.array(forcast_data[name])], axis=0)
+            print(result_array)
+        return result_array.reshape(len(names), -1), forcast_data["time"]
+ 
+    def get_simulation_data(data_names, start_time: float, end_time: float):
+        pass #TODO
+
+    def advance(self, u: np.array) -> dict:
+        u = u.reshape(-1)
+        assert len(u) == len(self.activated_input)
+        
+        #TODO ajouter check de borne
+
+        input_dict = {key : 0.0 for key in self.inputs_info.keys()}
+        for label, value in zip(self.activated_input, u):
+            input_dict[label] = value
+            input_dict[self._mask_available_input[self.available_input.index(label)]] = 1.0
+
+        measurements_info = _check_response(requests.post(f"{self.url}/advance", json=input_dict))
+        measurements_array = np.array([ measurements_info[label] for label in self.activated_measurements])
+
+        return measurements_array
 
     def get_kpi(self) -> dict:
         kpi_res = _check_response(requests.get(f"{self.url}/kpi")) 
         return kpi_res
-        
+    
+    def results(self) -> dict:
+        result = _check_response(resquest.get(f"{self.url}/results"))
+        return result
+
     def setKpi(self, kpi : CustomKPI):
         pass        
 
@@ -131,4 +198,4 @@ class Boptest:
 
 
 if "__main__"==__name__:
-    a = Boptest("testcase1")
+    a = Boptest("bestest_hydronic")
