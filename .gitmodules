@@ -1,0 +1,3 @@
+[submodule "project1-boptest"]
+	path = project1_boptest
+	url = git@github.com:Enderdead/project1-boptest.git
