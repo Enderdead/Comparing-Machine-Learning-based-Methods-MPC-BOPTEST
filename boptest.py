@@ -134,7 +134,8 @@ class Boptest:
         _check_response(requests.put(f"{self.url}/step", json={"step" : step}))
     
     def initialize(self, start_time: float=0.0, warmup_period: float=0.0):
-        pass
+        _check_response(requests.put(f"{self.url}/initialize", json={"start_time" : start_time, "warmup_period":warmup_period}))
+        
     
     def set_scenario(self, electricity_price: str=None, time_period: str=None) -> None:
         scenario_dict = {"electricity_price":electricity_price} if not electricity_price is None else  {}
