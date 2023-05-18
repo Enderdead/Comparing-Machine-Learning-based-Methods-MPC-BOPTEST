@@ -183,7 +183,7 @@ class Boptest:
         return kpi_res
     
     def results(self) -> dict:
-        result = _check_response(resquest.get(f"{self.url}/results"))
+        result = _check_response(requests.get(f"{self.url}/results"))
         return result
 
     def setKpi(self, kpi : CustomKPI):
