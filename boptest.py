@@ -81,7 +81,7 @@ class Boptest:
 
         self.inputs_info = self.get_inputs_info()
         self.available_input =  [x for x in list(self.inputs_info.keys()) if not x.endswith("_activate")]
-        self.available_measurements  = list(self.get_measurements_info().keys())
+        self.available_measurements  = list(self.get_measurements_info().keys()) + self.available_input
         
         self._mask_available_input = [process.extractOne(item, [x for x in list(self.inputs_info.keys()) if x.endswith("_activate")] )[0] for item in self.available_input]
         self.activated_input = self.available_input 
@@ -93,7 +93,7 @@ class Boptest:
 
     def set_activated_measurements(self, measurements_list: list) -> None:
         assert np.all(np.array([x in self.available_measurements for x in measurements_list]))
-        self.available_measurements = measurements_list
+        self.activated_measurements = measurements_list
 
     def _start_server(self):
         _run_command(f"docker build -t {Boptest._DOCKER_IMAGE_NAME} ./project1_boptest")
@@ -140,7 +140,8 @@ class Boptest:
     def set_scenario(self, electricity_price: str=None, time_period: str=None) -> None:
         scenario_dict = {"electricity_price":electricity_price} if not electricity_price is None else  {}
         if not time_period is None: scenario_dict["time_period"] = time_period 
-        _check_response(requests.put(f"{self.url}/scenario", json=scenario_dict))
+        data_res = _check_response(requests.put(f"{self.url}/scenario", json=scenario_dict))
+        return data_res
 
     def get_scenario(self) -> dict:
         scenario_dict = _check_response(requests.get(f"{self.url}/scenario"))
@@ -160,8 +161,9 @@ class Boptest:
             print(result_array)
         return result_array.reshape(len(names), -1), forcast_data["time"]
  
-    def get_simulation_data(data_names, start_time: float, end_time: float):
-        pass #TODO
+    def get_simulation_data(self, data_names, start_time: float, end_time: float):
+        simu_data = _check_response(requests.put(f"{self.url}/results", json={"point_names": data_names, "start_time": start_time, "final_time": end_time}))
+        return simu_data
 
     def advance(self, u: np.array) -> dict:
         u = u.reshape(-1)
@@ -174,10 +176,12 @@ class Boptest:
             input_dict[label] = value
             input_dict[self._mask_available_input[self.available_input.index(label)]] = 1.0
 
-        measurements_info = _check_response(requests.post(f"{self.url}/advance", json=input_dict))
-        measurements_array = np.array([ measurements_info[label] for label in self.activated_measurements])
-
-        return measurements_array
+        try:
+            measurements_info = _check_response(requests.post(f"{self.url}/advance", json=input_dict))
+            measurements_array = np.array([ measurements_info[label] for label in self.activated_measurements])
+        except KeyError:
+            return None, None
+        return measurements_array, measurements_info
 
     def get_kpi(self) -> dict:
         kpi_res = _check_response(requests.get(f"{self.url}/kpi")) 
@@ -193,7 +197,7 @@ class Boptest:
 
     def __del__(self):
         try:
-            requests.put(f"{self.url}/quit", json={})
+            requests.put(f"{self.url}/stop", json={})
         except:
             print("Boptest is not closed properly (check your running containers)")
 
