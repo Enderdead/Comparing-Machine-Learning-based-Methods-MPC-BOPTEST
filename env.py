@@ -1,11 +1,14 @@
 import numpy as np 
 from scipy import interpolate
 from boptest import *
+import datetime as dt
 
 
 def dict_to_matrix(d, column_names):
     return np.column_stack([d[name] for name in column_names if name in d])
 
+def merge_dicts(dict1, dict2):
+    return {key: np.concatenate((dict1.get(key, []), dict2.get(key, []))) for key in set(dict1).union(dict2)}
 
 
 class MpcEnv():
@@ -37,6 +40,8 @@ class MpcEnv():
 
 
     def reset(self):
+        self.simulator.set_timestep(self.timestep)
+
         if not self.scenario_name is None:
             info = self.simulator.set_scenario(time_period=self.scenario_name)
             print(info)
@@ -91,30 +96,108 @@ class MpcEnv():
 
         if msr_array is None:
             self._ready = False
-            return True, None, None
+            return True, None, None, None
 
         self.t = info["time"]
         self.history_u.append(u)
         self.history_y.append(dict_to_matrix(info, self.simulator.activated_measurements))
 
         if self.scenario_bound[1]<self.t:
-            return True, None, None
+            return True, None, None, None
 
         self.forcast = self._get_forcast()
-        return False, dict_to_matrix(info, self.simulator.activated_measurements), self.forcast
+        return False, dict_to_matrix(info, self.simulator.activated_measurements), self.forcast, info
 
     def get_full_data(self):
-        return self.simulator.get_simulation_data(["time",]+self.simulator.available_input+env.simulator.available_measurements, self.scenario_bound[0],self.scenario_bound[1] )
+        return self.simulator.get_simulation_data(["time",]+self.simulator.available_input+self.simulator.available_measurements, self.scenario_bound[0],self.scenario_bound[1] )
 
 
 
 class BestestHydronicPwm(MpcEnv):
-    SAMPLING_RATE = 900
-    PWM_PERIOD = 300
-    _OBS_DESCRIPTION = ["Température interieur", "Température exterieur", "normal radiation (sky cover included)","sky cover", "humidity", "elevation_soleil"]#"heur_cos", "heure_sin","saison_cos", "saison_sin"]
-    _OBS_LIST = ["reaTRoo_y", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaHDirNor_y", "weaSta_reaWeaNTot_y", "weaSta_reaWeaRelHum_y", "weaSta_reaWeaSolAlt_y"]
-    _CTRL_LIST = ["ovePum_u", "oveTSetSup_u"]
-    _SCENARIO_LIST = ["test":[], "train_little", "train_medium", "train_big"]
+    _ORIGIN = dt.datetime(2009,1,1)
+    _BOPTEST_TESTCASE = "bestest_hydronic"
+    _OBS_DESCRIPTION  = ["Température interieur", "Température exterieur", "normal radiation (sky cover included)","sky cover", "humidity", "elevation_soleil"]#"heur_cos", "heure_sin","saison_cos", "saison_sin"]
+    _OBS_LIST         = ["reaTRoo_y", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaHDirNor_y", "weaSta_reaWeaNTot_y", "weaSta_reaWeaRelHum_y", "weaSta_reaWeaSolAlt_y"]
+    _CTRL_LIST        = ["ovePum_u", "oveTSetSup_u"]
+    _SCENARIO_LIST = {"test": [ dt.datetime(2009,1,1),dt.datetime(2009,1,11)               ], 
+              "train_little": [ dt.datetime(2009,1,11),dt.datetime(2009,1,21)], 
+              "train_medium": [ dt.datetime(2009,1,11),dt.datetime(2009,2, 1)],
+              "train_big"   : [ dt.datetime(2009,1,11),dt.datetime(2009,3,11)]}
+    _PWM_MIN = 293.15
+    _PWM_MAX = 353.15
 
-    def __init__(self):
-        pass    
+    def __init__(self, scenario_name, timestep, pwd_freq_per_it):
+        self.timestep = timestep
+        self.pwd_freq_per_it = pwd_freq_per_it
+        
+        scenario_bound = BestestHydronicPwm._SCENARIO_LIST[scenario_name]
+        super(BestestHydronicPwm, self).__init__(BestestHydronicPwm._BOPTEST_TESTCASE,
+                                            control_list=BestestHydronicPwm._CTRL_LIST,
+                                            observation_list=BestestHydronicPwm._OBS_LIST, 
+                                            forcast_list= list(), 
+                                            regressive_period=3,
+                                            timestep=self.timestep, 
+                                            scenario_bound=[(x-BestestHydronicPwm._ORIGIN).total_seconds() for x in scenario_bound] )    
+        
+        self.simulator.set_timestep(self.timestep)
+
+        self.history_data = dict()
+
+    def _save_step(self):
+        return
+        
+        local_data = self.simulator.get_simulation_data(["time",]+self.simulator.available_input+self.simulator.available_measurements, self.t-self.timestep,self.t )
+        if len(self.history_data)==0:
+            self.history_data = local_data
+        else:
+            self.history_data = merge_dicts(self.history_data, local_data)
+
+    def step(self, u):
+        assert len(u) == 1
+        assert self._ready, "Please initiate the simulator"
+        assert 0<=float(u)<=1
+
+        residual = 0.0
+        for i in range(self.pwd_freq_per_it):
+            if np.isclose(float(u), 0.0, atol=4e-2) or np.isclose(float(u), 1.0, atol=1e-2) :
+                self.simulator.set_timestep(self.timestep)
+                msr_array, info = self.simulator.advance(np.array([1.0, BestestHydronicPwm._PWM_MIN  + (BestestHydronicPwm._PWM_MAX-BestestHydronicPwm._PWM_MIN)*np.round(float(u))]))
+                if msr_array is None: break
+                continue
+            
+            pwm_time_on = 2*int(0.5*float(u)*self.timestep/self.pwd_freq_per_it)
+            pwm_time_off = self.timestep/self.pwd_freq_per_it - pwm_time_on
+            residual = 0 # TODO
+
+
+            self.simulator.set_timestep(pwm_time_on)
+            msr_array, info = self.simulator.advance(np.array([1.0,BestestHydronicPwm._PWM_MAX]))
+            if msr_array is None: break
+            self.simulator.set_timestep(pwm_time_off)
+            msr_array, info = self.simulator.advance(np.array([1.0,BestestHydronicPwm._PWM_MIN]))
+            if msr_array is None: break
+
+        if msr_array is None:
+            self._ready = False
+            self._save_step()
+            return True, None, None, None
+
+        self.t = info["time"]
+        self.history_u.append(u)
+        self.history_y.append(dict_to_matrix(info, self.simulator.activated_measurements))
+
+        if self.scenario_bound[1]<self.t:
+            self._save_step()
+            return True, None, None
+
+        self.forcast = self._get_forcast()
+        self._save_step()
+        return False, dict_to_matrix(info, self.simulator.activated_measurements), self.forcast, info
+
+    def _get_control(self, end_time, win_size):
+        self.simulator.set_timestep(self.timestep)
+        return super(BestestHydronicPwm, self)._get_control(end_time, win_size)
+
+    def _get_observation(self, end_time, win_size):
+        self.simulator.set_timestep(self.timestep)
+        return super(BestestHydronicPwm, self)._get_observation(end_time, win_size)
