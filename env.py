@@ -44,7 +44,6 @@ class MpcEnv():
 
         if not self.scenario_name is None:
             info = self.simulator.set_scenario(time_period=self.scenario_name)
-            print(info)
             self.t = info["time_period"]["time"]
             self.scenario_bound = [self.t, self.experience_duration]
         else:
@@ -143,21 +142,33 @@ class BestestHydronicPwm(MpcEnv):
 
         self.history_data = dict()
 
-    def _save_step(self):
-        return
-        
-        local_data = self.simulator.get_simulation_data(["time",]+self.simulator.available_input+self.simulator.available_measurements, self.t-self.timestep,self.t )
-        if len(self.history_data)==0:
-            self.history_data = local_data
+
+    def reset(self):
+        self.simulator.set_timestep(self.timestep)
+
+        if not self.scenario_name is None:
+            info = self.simulator.set_scenario(time_period=self.scenario_name)
+            self.t = info["time_period"]["time"]
+            self.scenario_bound = [self.t, self.experience_duration]
         else:
-            self.history_data = merge_dicts(self.history_data, local_data)
+            self.simulator.initialize(self.scenario_bound[0]+self.regressive_period*self.timestep, self.regressive_period*self.timestep)
+            self.t = self.scenario_bound[0]+self.regressive_period*self.timestep
+
+        
+        # récup les infos
+        past_obs  = self._get_observation(self.t, win_size=self.regressive_period) 
+        past_ctrl = self._get_control(self.t, win_size=self.regressive_period-1)
+        self.history_y, self.history_u = [[self.t, self._get_observation(self.t, win_size=1)],], list()
+        self._ready = True
+        return self._get_observation(self.t, win_size=self.regressive_period)
+
+
 
     def step(self, u):
         assert len(u) == 1
         assert self._ready, "Please initiate the simulator"
         assert 0<=float(u)<=1
 
-        residual = 0.0
         for i in range(self.pwd_freq_per_it):
             if np.isclose(float(u), 0.0, atol=4e-2) or np.isclose(float(u), 1.0, atol=1e-2) :
                 self.simulator.set_timestep(self.timestep)
@@ -166,9 +177,7 @@ class BestestHydronicPwm(MpcEnv):
                 continue
             
             pwm_time_on = 2*int(0.5*float(u)*self.timestep/self.pwd_freq_per_it)
-            pwm_time_off = self.timestep/self.pwd_freq_per_it - pwm_time_on
-            residual = 0 # TODO
-
+            pwm_time_off = self.timestep/self.pwd_freq_per_it - pwm_time_on # TODO apply real PWM by using residual between each PWM period
 
             self.simulator.set_timestep(pwm_time_on)
             msr_array, info = self.simulator.advance(np.array([1.0,BestestHydronicPwm._PWM_MAX]))
@@ -179,19 +188,16 @@ class BestestHydronicPwm(MpcEnv):
 
         if msr_array is None:
             self._ready = False
-            self._save_step()
             return True, None, None, None
 
         self.t = info["time"]
-        self.history_u.append(u)
-        self.history_y.append(dict_to_matrix(info, self.simulator.activated_measurements))
+        self.history_u.append([self.t,u])
+        self.history_y.append([self.t,dict_to_matrix(info, self.simulator.activated_measurements)])
 
         if self.scenario_bound[1]<self.t:
-            self._save_step()
-            return True, None, None
+            return True, None, None, None
 
         self.forcast = self._get_forcast()
-        self._save_step()
         return False, dict_to_matrix(info, self.simulator.activated_measurements), self.forcast, info
 
     def _get_control(self, end_time, win_size):
