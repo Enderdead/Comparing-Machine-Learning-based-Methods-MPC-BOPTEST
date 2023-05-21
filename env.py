@@ -115,8 +115,8 @@ class MpcEnv():
 class BestestHydronicPwm(MpcEnv):
     _ORIGIN = dt.datetime(2009,1,1)
     _BOPTEST_TESTCASE = "bestest_hydronic"
-    _OBS_DESCRIPTION  = ["Température interieur", "Température exterieur", "normal radiation (sky cover included)","sky cover", "humidity", "elevation_soleil"]#"heur_cos", "heure_sin","saison_cos", "saison_sin"]
-    _OBS_LIST         = ["reaTRoo_y", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaHDirNor_y", "weaSta_reaWeaNTot_y", "weaSta_reaWeaRelHum_y", "weaSta_reaWeaSolAlt_y"]
+    _OBS_DESCRIPTION  = ["Température interieur", "Température exterieur", "normal radiation (sky cover included)","horizontal radiation","sky cover", "humidity", "elevation_soleil"]#"heur_cos", "heure_sin","saison_cos", "saison_sin"]
+    _OBS_LIST         = ["reaTRoo_y", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaHDirNor_y","weaSta_reaWeaHGloHor_y", "weaSta_reaWeaNTot_y", "weaSta_reaWeaRelHum_y", "weaSta_reaWeaSolAlt_y"]
     _CTRL_LIST        = ["ovePum_u", "oveTSetSup_u"]
     _SCENARIO_LIST = {"test": [ dt.datetime(2009,1,1),dt.datetime(2009,1,11)               ], 
               "train_little": [ dt.datetime(2009,1,11),dt.datetime(2009,1,21)], 
@@ -124,6 +124,7 @@ class BestestHydronicPwm(MpcEnv):
               "train_big"   : [ dt.datetime(2009,1,11),dt.datetime(2009,3,11)]}
     _PWM_MIN = 293.15
     _PWM_MAX = 353.15
+    _MIN_TIMESTEP = 2
 
     def __init__(self, scenario_name, timestep, pwd_freq_per_it):
         self.timestep = timestep
@@ -169,22 +170,24 @@ class BestestHydronicPwm(MpcEnv):
         assert self._ready, "Please initiate the simulator"
         assert 0<=float(u)<=1
 
-        for i in range(self.pwd_freq_per_it):
-            if np.isclose(float(u), 0.0, atol=4e-2) or np.isclose(float(u), 1.0, atol=1e-2) :
+        for _ in range(self.pwd_freq_per_it):
+            if np.isclose(float(u), 0.0, atol=4e-2) or np.isclose(float(u), 1.0, atol=4e-2) :
                 self.simulator.set_timestep(self.timestep)
-                msr_array, info = self.simulator.advance(np.array([1.0, BestestHydronicPwm._PWM_MIN  + (BestestHydronicPwm._PWM_MAX-BestestHydronicPwm._PWM_MIN)*np.round(float(u))]))
-                if msr_array is None: break
-                continue
+                msr_array, info = self.simulator.advance(np.array([1.0, BestestHydronicPwm._PWM_MIN  + (BestestHydronicPwm._PWM_MAX-BestestHydronicPwm._PWM_MIN)*np.round(float(u))]))  
+                break
             
-            pwm_time_on = 2*int(0.5*float(u)*self.timestep/self.pwd_freq_per_it)
+            pwm_time_on = BestestHydronicPwm._MIN_TIMESTEP*int((1/BestestHydronicPwm._MIN_TIMESTEP)*float(u)*self.timestep/self.pwd_freq_per_it)
             pwm_time_off = self.timestep/self.pwd_freq_per_it - pwm_time_on # TODO apply real PWM by using residual between each PWM period
 
-            self.simulator.set_timestep(pwm_time_on)
-            msr_array, info = self.simulator.advance(np.array([1.0,BestestHydronicPwm._PWM_MAX]))
-            if msr_array is None: break
-            self.simulator.set_timestep(pwm_time_off)
-            msr_array, info = self.simulator.advance(np.array([1.0,BestestHydronicPwm._PWM_MIN]))
-            if msr_array is None: break
+            if pwm_time_on>BestestHydronicPwm._MIN_TIMESTEP:
+                self.simulator.set_timestep(pwm_time_on)
+                msr_array, info = self.simulator.advance(np.array([1.0,BestestHydronicPwm._PWM_MAX]))
+                if msr_array is None: break
+            
+            if pwm_time_off>BestestHydronicPwm._MIN_TIMESTEP:
+                self.simulator.set_timestep(pwm_time_off)
+                msr_array, info = self.simulator.advance(np.array([1.0,BestestHydronicPwm._PWM_MIN]))
+                if msr_array is None: break
 
         if msr_array is None:
             self._ready = False
