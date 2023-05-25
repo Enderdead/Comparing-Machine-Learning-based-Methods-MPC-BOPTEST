@@ -196,8 +196,10 @@ class Boptest:
 
 
     def __del__(self):
+        _run_command(f"docker stop {self._random_tag}")
         try:
-            requests.put(f"{self.url}/stop", json={})
+            pass
+            #requests.put(f"{self.url}/stop", json={})
         except:
             print("Boptest is not closed properly (check your running containers)")
 
