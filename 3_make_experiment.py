@@ -37,7 +37,7 @@ else:
 envBoptest = BestestHydronicPwm("test", SAMPLING_RATE, PWM_FREQ)
 init_y, init_u, init_forcast  = envBoptest.reset()
 experiment_size = (envBoptest.scenario_bound[1]-envBoptest.scenario_bound[0])/SAMPLING_RATE
-
+curr_temp = init_y[-1,:]
 
 # Initializing the controller
 mpc_controller = ARXMpc(MODEL_PATH, HORIZON) if args.model=="linear" else CNNMpc(MODEL_PATH, HORIZON)
@@ -50,9 +50,10 @@ progress_bar = IncrementalBar("Simulation ", suffix='%(percent)d%% [ elapsed tim
 
 # Main simulation loop
 i = 0
+forcast = init_forcast
 while not terminated:
     i += 1
-    u = mpc_controller.update(curr_temp)
+    u = mpc_controller.update(curr_temp, forcast)
     terminated, y, forcast, info = envBoptest.step(np.array([u]))
     if terminated: continue
 

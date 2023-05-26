@@ -25,7 +25,6 @@ def train_CNLARX(dataset_pd, na=3, nb=3, nb_layer=2, units=24, y_label=["reaTRoo
 
     d_y = d_y * 10.0
 
-    print(u_extended.shape, y_extended.shape, y_t_1.shape, d_y.shape)
     flat_y_extended = np.transpose(y_extended, (0,2,1)).reshape(y_extended.shape[0],-1)
     flat_u_extended = np.transpose(u_extended, (0,2,1)).reshape(u_extended.shape[0],-1)
 
