@@ -27,7 +27,7 @@ print("Initiate testset simulation")
 
 # Initializing the simulation environment
 envBoptest = BestestHydronicPwm("test", SAMPLING_RATE, PWM_FREQ)
-init_data  = envBoptest.reset()
+init_data, _, _  = envBoptest.reset()
 
 curr_temp = init_data[0,0]
 experiment_size = (envBoptest.scenario_bound[1]-envBoptest.scenario_bound[0])/SAMPLING_RATE
@@ -43,7 +43,9 @@ terminated = False
 progress_bar =IncrementalBar("Simulation ", suffix='%(percent)d%% [ elapsed time %(elapsed_td)s / ETA %(eta_td)s]', max=experiment_size)
 
 # Main simulation loop
+
 while not terminated:
+    i += 1
     u = controller.update(curr_temp)
     terminated, y, forcast, info = envBoptest.step(np.array([u]))
     if terminated: continue
@@ -56,7 +58,6 @@ while not terminated:
     progress_bar.next()
 
 # Clean up progress bar
-progress_bar.clearln()
 del progress_bar
 
 
@@ -105,7 +106,7 @@ print("Initiate trainset simulation")
 
 # Initializing the simulation environment
 envBoptest = BestestHydronicPwm("train_big", SAMPLING_RATE, PWM_FREQ)
-init_data  = envBoptest.reset()
+init_data, _, _  = envBoptest.reset()
 
 curr_temp = init_data[0,0]
 experiment_size = (envBoptest.scenario_bound[1]-envBoptest.scenario_bound[0])/SAMPLING_RATE
@@ -158,7 +159,7 @@ end_little_dataset_dt = envBoptest._SCENARIO_LIST["train_little"][1]-origin_dt
 a = envBoptest._SCENARIO_LIST["train_medium"][1] - envBoptest._SCENARIO_LIST["train_medium"][0]
 b = envBoptest._SCENARIO_LIST["train_big"][1] - origin_dt
 
-
+1/0
 
 medium_datapd = datapd[datapd["t"]<=end_medium_dataset_dt.total_seconds()]
 little_datapd = datapd[datapd["t"]<=end_little_dataset_dt.total_seconds()]

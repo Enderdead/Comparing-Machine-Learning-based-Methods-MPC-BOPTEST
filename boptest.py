@@ -158,7 +158,6 @@ class Boptest:
         result_array = np.array([])
         for name in names:
             result_array = np.concatenate([result_array, np.array(forcast_data[name])], axis=0)
-            print(result_array)
         return result_array.reshape(len(names), -1), forcast_data["time"]
  
     def get_simulation_data(self, data_names, start_time: float, end_time: float):
@@ -196,7 +195,7 @@ class Boptest:
 
 
     def __del__(self):
-        _run_command(f"docker stop {self._random_tag}")
+        _run_command(f"docker kill {self._random_tag}")
         try:
             pass
             #requests.put(f"{self.url}/stop", json={})

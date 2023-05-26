@@ -31,6 +31,6 @@ training_dataset_si = deepSI.System_data(y = extended_training_dataset["reaTRoo_
 
 
 arx_model = train_ARX(extended_training_dataset, na=3, nb=3, u_label=["u", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y",]+[f"Tvert_{i}" for i in range(T_vertN)], y_label=["reaTRoo_y"])
-compare_deepSI(training_dataset_si , arx_model,K=12)
 
+arx_model.save(os.path.join(".", "_cache_models", "arx_model"))
 #compare_deepSI(test_dataset_si , arx_model,K=12)

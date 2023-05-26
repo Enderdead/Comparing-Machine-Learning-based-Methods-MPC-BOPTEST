@@ -24,6 +24,7 @@ class MpcEnv():
         self.simulator.set_activated_input(control_list)
         self.simulator.set_activated_measurements(observation_list)
         self.simulator.set_timestep(timestep)
+        self.forcast_list = forcast_list
 
         self.history_y = list()
         self.history_u = list()
@@ -87,7 +88,8 @@ class MpcEnv():
         return dict_to_matrix(res_dict, self.simulator.activated_measurements)
 
     def _get_forcast(self):
-        return np.array([])
+        data, time = self.simulator.get_forcast(self.forcast_list, self.timestep*self.predictive_period, self.timestep)
+        return data.T[1:,:]
 
     def step(self, u):
         assert self._ready, "Please initiate the simulator"
@@ -117,6 +119,7 @@ class BestestHydronicPwm(MpcEnv):
     _BOPTEST_TESTCASE = "bestest_hydronic"
     _OBS_DESCRIPTION  = ["Température interieur", "Température exterieur", "normal radiation (sky cover included)","horizontal radiation","sky cover", "humidity", "elevation_soleil"]#"heur_cos", "heure_sin","saison_cos", "saison_sin"]
     _OBS_LIST         = ["reaTRoo_y", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaHDirNor_y","weaSta_reaWeaHGloHor_y", "weaSta_reaWeaNTot_y", "weaSta_reaWeaRelHum_y", "weaSta_reaWeaSolAlt_y"]
+    _FORCAST_LIST     = ["LowerSetp[1]", "TDryBul","HDirNor","HGloHor", "nTot", "relHum", "solAlt" ]
     _CTRL_LIST        = ["ovePum_u", "oveTSetSup_u"]
     _SCENARIO_LIST = {"test": [ dt.datetime(2009,1,1),dt.datetime(2009,1,11)               ], 
               "train_little": [ dt.datetime(2009,1,11),dt.datetime(2009,1,21)], 
@@ -126,16 +129,18 @@ class BestestHydronicPwm(MpcEnv):
     _PWM_MAX = 353.15
     _MIN_TIMESTEP = 2
 
-    def __init__(self, scenario_name, timestep, pwd_freq_per_it):
+    def __init__(self, scenario_name, timestep, pwd_freq_per_it, forcast_size=10):
         self.timestep = timestep
         self.pwd_freq_per_it = pwd_freq_per_it
+        self.forcast_size = forcast_size
         
         scenario_bound = BestestHydronicPwm._SCENARIO_LIST[scenario_name]
         super(BestestHydronicPwm, self).__init__(BestestHydronicPwm._BOPTEST_TESTCASE,
                                             control_list=BestestHydronicPwm._CTRL_LIST,
                                             observation_list=BestestHydronicPwm._OBS_LIST, 
-                                            forcast_list= list(), 
+                                            forcast_list= BestestHydronicPwm._FORCAST_LIST, 
                                             regressive_period=3,
+                                            predictive_period=forcast_size, 
                                             timestep=self.timestep, 
                                             scenario_bound=[(x-BestestHydronicPwm._ORIGIN).total_seconds() for x in scenario_bound] )    
         
@@ -160,8 +165,9 @@ class BestestHydronicPwm(MpcEnv):
         past_obs  = self._get_observation(self.t, win_size=self.regressive_period) 
         past_ctrl = self._get_control(self.t, win_size=self.regressive_period-1)
         self.history_y, self.history_u = [[self.t, self._get_observation(self.t, win_size=1)],], list()
+        
         self._ready = True
-        return self._get_observation(self.t, win_size=self.regressive_period)
+        return past_obs, past_ctrl, self._get_forcast()
 
 
 
@@ -200,12 +206,19 @@ class BestestHydronicPwm(MpcEnv):
         if self.scenario_bound[1]<self.t:
             return True, None, None, None
 
-        self.forcast = self._get_forcast()
-        return False, dict_to_matrix(info, self.simulator.activated_measurements), self.forcast, info
+        forcast = self._get_forcast()
+        return False, dict_to_matrix(info, self.simulator.activated_measurements), forcast, info
 
     def _get_control(self, end_time, win_size):
+        assert self.timestep%2 == 0, "not supported for odd timestep"
         self.simulator.set_timestep(self.timestep)
-        return super(BestestHydronicPwm, self)._get_control(end_time, win_size)
+        self.simulator.set_timestep(2)
+
+        res =  super(BestestHydronicPwm, self)._get_control(end_time, win_size*int(self.timestep/2))
+
+        res = np.convolve(res[:,0], np.ones(int(self.timestep/2))/(self.timestep/2),"valid")
+
+        return res[::int(self.timestep/2)].reshape(-1, 1)
 
     def _get_observation(self, end_time, win_size):
         self.simulator.set_timestep(self.timestep)
