@@ -5,9 +5,10 @@ import pickle
 import os
 import sys
 
-from models import train_ARX, extend_dataset_Ivert, train_CNLARX, ArxSolar
+from models import train_ARX, extend_dataset_Ivert, train_CNLARX, ArxSolar, CNLArx
 from deepSI_tools import *
-from models.arx import TVP_LABEL 
+from models.arx import TVP_LABEL
+from models.cnlarx import CNLArx 
 
 
 # Load dataset
@@ -22,14 +23,14 @@ extended_test_dataset     = extend_dataset_Ivert(test_dataset, T_vertN)
 
 
 # Train and save the convex neural network 
-#cnn_model = train_CNLARX(extended_training_dataset, na=3, nb=3, u_label=["u", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y","weaSta_reaWeaHGloHor_y","weaSta_reaWeaSolAlt_y","cos_day", "sin_day" ], y_label=["reaTRoo_y"])
-#cnn_model.save(os.path.join(".","_cache_models", "convex_model"))
+cnn_model = train_CNLARX(extended_training_dataset, na=3, nb=3)
+cnn_model.save(os.path.join(".","_cache_models", "convex_model"))
 
 
 
 arx_model = train_ARX(extended_training_dataset, na=3, nb=3, n_tvert=6)
 
 arx_model.save(os.path.join(".", "_cache_models", "arx_model"))
-TVP_LABEL=["weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y","time", "weaSta_reaWeaHGloHor_y", "weaSta_reaWeaSolAlt_y"]
-tvp = training_dataset[TVP_LABEL].values
-res = arx_model._process_tvp(tvp)
+#=["weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y","time", "weaSta_reaWeaHGloHor_y", "weaSta_reaWeaSolAlt_y"]
+tvp = training_dataset[CNLArx._TVP_LABEL].values
+res = cnn_model._process_tvp(tvp)

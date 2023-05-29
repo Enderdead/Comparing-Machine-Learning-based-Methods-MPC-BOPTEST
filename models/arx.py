@@ -33,7 +33,6 @@ class ArxSolar():
         self.scaler_tvp = StandardScaler() 
     
         self._fitted = False
-        self._coef_jnp = None
 
     def _process_tvp(self, tvp):
         I_vert = tvp[:,3:4]*np.cos(np.pi/2  - tvp[:,4:5])/np.sin(np.pi/2 - tvp[:,4:5])
@@ -42,10 +41,6 @@ class ArxSolar():
         one_hot_mat[list(range(tvp.shape[0])),categories.reshape(-1).astype(np.int32)] = 1.0*I_vert.reshape(-1)
         tvp = np.concatenate([tvp[:,0:2],categories, one_hot_mat] , axis=1)
         return tvp
-
-
-
-
 
     def train(self, dataset):
         y, u, tvp = dataset[y_LABEL].values, dataset[U_LABEL].values, dataset[TVP_LABEL].values
@@ -78,28 +73,15 @@ class ArxSolar():
         pickle.dump(self, open(path, "wb"))
 
 
-    def predict(self, y, u):
-        11/0 # TODO Réimplémenter  avec tvp 
+    def predict(self, y, u, tvp):
         assert self._fitted, "Please fit the model"
 
-        u = self._process_input(u)
-        y, u = self.scaler_y.transform(y), self.scaler_u.transform(u)
-
-        model_input = np.concatenate([y[-self.na:].reshape(-1), u[-self.nb:].T.reshape(-1)]).reshape(1,-1) 
+        y, u, tvp = self.scaler_y.transform(y), self.scaler_u.transform(u), self.scaler_tvp.transform(tvp)
+        model_input = np.concatenate([y[-self.na:].reshape(-1), u[-self.nb:].reshape(-1), tvp[-self.nb:].reshape(-1)]).reshape(1,-1) 
         pred =  self.core.predict(model_input)
 
         return self.scaler_y.inverse_transform(pred)
 
-
-    def predict_jnp(self, y, u):
-        11/0 # TODO Réimplémenter  avec tvp 
-        u = self._process_input(u)
-        y = y*self.scaler_y._scale + self.scaler_y._mean 
-        u = u*self.scaler_u._scale + self.scaler_u._mean 
-
-        model_input = np.concatenate([y[-self.na:].reshape(-1), u[-self.nb:].T.reshape(-1)]).reshape(1,-1) 
-        pred =( jnp.dot(model_input, self._coef_jnp)-self.scaler_y._mean )/self.scaler_y._scale
-        return pred
 
 
 

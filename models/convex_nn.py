@@ -26,7 +26,8 @@ class Proj(tf.keras.layers.Dense):
         else:
             self.connections = None
             self.selected_index = selected_index
-        self.output_dim = len(selected_index) if connections is None else self.connections.shape[-1] 
+        self.output_dim = len(selected_index) if connections is None else self.connections.shape[-1]
+        self.bias = None
         super(Proj,self).__init__( self.output_dim,use_bias=False )  
 
     def build(self, input_shape):
@@ -199,14 +200,14 @@ class PICNN():
 
     @classmethod
     def load(cls, path):
-        conf = pickle.load(open(os.path.join(path, "obj.pickle"), "rb"))
+        conf = pickle.load(open(os.path.join(path, "model.pickle"), "rb"))
         result = cls(nb_input=conf.nb_input, nb_input_conv=conf.nb_input_conv, nb_output=conf.nb_output, act_func=conf.act_func, nb_layer=conf.nb_layer, units=conf.units, recursive_convexity=conf.recursive_convexity, kernel_initializer=conf.kernel_initializer)
         result.core.load_weights(os.path.join(path, "model.h5"))
         return result
 
     # The fonction is convex for the first nb_input_conv layer
     def __init__(self, nb_input=2, input_conv_list=[], nb_output=1, act_func=tf.nn.relu, nb_layer=2, units=24, recursive_convexity=False, kernel_initializer=tf.keras.initializers.GlorotUniform()):
-        assert nb_input>=nb_input_conv, "Please provide a nb conv input equals or less than the total input number"
+        assert nb_input>=len(input_conv_list), "Please provide a nb conv input equals or less than the total input number"
         
         self.output_func = tf.identity
         self.act_func = act_func
@@ -267,7 +268,7 @@ class PICNN():
 
             os.mkdir(path)
         
-        pickle.dump(self, open(os.path.join(path, "obj.pickle"), "wb"))
+        pickle.dump(self, open(os.path.join(path, "model.pickle"), "wb"))
         self.core.save_weights(os.path.join(path, "model.h5"))
 
     def __getstate__(self):
