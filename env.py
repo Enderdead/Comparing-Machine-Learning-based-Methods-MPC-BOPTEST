@@ -90,7 +90,7 @@ class MpcEnv():
 
     def _get_forcast(self):
         data, time = self.simulator.get_forcast(self.forcast_list, self.timestep*self.predictive_period, self.timestep)
-        return data.T[1:,:]
+        return data.T[:-1,:]
 
     def step(self, u):
         assert self._ready, "Please initiate the simulator"

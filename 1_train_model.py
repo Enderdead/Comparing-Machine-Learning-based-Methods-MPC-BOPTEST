@@ -6,7 +6,8 @@ import os
 import sys
 
 from models import train_ARX, extend_dataset_Ivert, train_CNLARX, ArxSolar
-from deepSI_tools import * 
+from deepSI_tools import *
+from models.arx import TVP_LABEL 
 
 
 # Load dataset
@@ -29,3 +30,6 @@ extended_test_dataset     = extend_dataset_Ivert(test_dataset, T_vertN)
 arx_model = train_ARX(extended_training_dataset, na=3, nb=3, n_tvert=6)
 
 arx_model.save(os.path.join(".", "_cache_models", "arx_model"))
+TVP_LABEL=["weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y","time", "weaSta_reaWeaHGloHor_y", "weaSta_reaWeaSolAlt_y"]
+tvp = training_dataset[TVP_LABEL].values
+res = arx_model._process_tvp(tvp)
