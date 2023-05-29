@@ -45,7 +45,6 @@ progress_bar =IncrementalBar("Simulation ", suffix='%(percent)d%% [ elapsed time
 # Main simulation loop
 
 while not terminated:
-    i += 1
     u = controller.update(curr_temp)
     terminated, y, forcast, info = envBoptest.step(np.array([u]))
     if terminated: continue
@@ -159,7 +158,6 @@ end_little_dataset_dt = envBoptest._SCENARIO_LIST["train_little"][1]-origin_dt
 a = envBoptest._SCENARIO_LIST["train_medium"][1] - envBoptest._SCENARIO_LIST["train_medium"][0]
 b = envBoptest._SCENARIO_LIST["train_big"][1] - origin_dt
 
-1/0
 
 medium_datapd = datapd[datapd["t"]<=end_medium_dataset_dt.total_seconds()]
 little_datapd = datapd[datapd["t"]<=end_little_dataset_dt.total_seconds()]

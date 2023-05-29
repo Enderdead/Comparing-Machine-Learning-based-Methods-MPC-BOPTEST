@@ -5,7 +5,7 @@ import pickle
 import os
 import sys
 
-from models import train_ARX, extend_dataset_Ivert, train_CNLARX
+from models import train_ARX, extend_dataset_Ivert, train_CNLARX, ArxSolar
 from deepSI_tools import * 
 
 
@@ -21,16 +21,11 @@ extended_test_dataset     = extend_dataset_Ivert(test_dataset, T_vertN)
 
 
 # Train and save the convex neural network 
-cnn_model = train_CNLARX(extended_training_dataset, na=3, nb=3, u_label=["u", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y",]+[f"Tvert_{i}" for i in range(T_vertN)], y_label=["reaTRoo_y"])
-cnn_model.save(os.path.join(".","_cache_models", "convex_model"))
+#cnn_model = train_CNLARX(extended_training_dataset, na=3, nb=3, u_label=["u", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y","weaSta_reaWeaHGloHor_y","weaSta_reaWeaSolAlt_y","cos_day", "sin_day" ], y_label=["reaTRoo_y"])
+#cnn_model.save(os.path.join(".","_cache_models", "convex_model"))
 
 
 
-test_dataset_si = deepSI.System_data(y = extended_test_dataset["reaTRoo_y"], u=extended_test_dataset[["u", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y",]+[f"Tvert_{i}" for i in range(T_vertN)]] , dt=900)
-training_dataset_si = deepSI.System_data(y = extended_training_dataset["reaTRoo_y"], u=extended_training_dataset[["u", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y",]+[f"Tvert_{i}" for i in range(T_vertN)]] , dt=900)
-
-
-arx_model = train_ARX(extended_training_dataset, na=3, nb=3, u_label=["u", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y",]+[f"Tvert_{i}" for i in range(T_vertN)], y_label=["reaTRoo_y"])
+arx_model = train_ARX(extended_training_dataset, na=3, nb=3, n_tvert=6)
 
 arx_model.save(os.path.join(".", "_cache_models", "arx_model"))
-#compare_deepSI(test_dataset_si , arx_model,K=12)

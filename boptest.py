@@ -7,6 +7,7 @@ import random
 import time
 import numpy as np
 from contextlib import closing
+import copy
 from fuzzywuzzy import process
 from project1_boptest.examples.python.controllers.controller import Controller
 from project1_boptest.examples.python.custom_kpi.custom_kpi_calculator import CustomKPI
@@ -92,7 +93,7 @@ class Boptest:
         self.activated_input = input_list
 
     def set_activated_measurements(self, measurements_list: list) -> None:
-        assert np.all(np.array([x in self.available_measurements for x in measurements_list]))
+        assert np.all(np.array([x in self.available_measurements+["time"] for x in measurements_list]))
         self.activated_measurements = measurements_list
 
     def _start_server(self):
@@ -154,7 +155,7 @@ class Boptest:
     def get_forcast(self, names, horizon:float, interval:float) -> np.array:
         if isinstance(names, str):
             names = [names,]
-        forcast_data = _check_response(requests.put(f"{self.url}/forecast", json={"point_names":names, "horizon":horizon, "interval": interval}))
+        forcast_data = _check_response(requests.put(f"{self.url}/forecast", json={"point_names": [element for element in names if element!="time"], "horizon":horizon, "interval": interval}))
         result_array = np.array([])
         for name in names:
             result_array = np.concatenate([result_array, np.array(forcast_data[name])], axis=0)

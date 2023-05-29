@@ -76,7 +76,8 @@ class MpcEnv():
 
 
     def _get_observation(self, end_time, win_size):
-        input_dict = self.simulator.get_simulation_data(self.simulator.activated_measurements, end_time-win_size*self.timestep, end_time)
+        # We remove time because it is buggy...
+        input_dict = self.simulator.get_simulation_data([element for element in self.simulator.activated_measurements if element!="time"   ], end_time-win_size*self.timestep, end_time)
         target_time_index = np.linspace(end_time - self.timestep*(win_size-1), end_time, win_size)
         res_dict = {"time" : target_time_index}
         for key, value in input_dict.items():
@@ -117,9 +118,9 @@ class MpcEnv():
 class BestestHydronicPwm(MpcEnv):
     _ORIGIN = dt.datetime(2009,1,1)
     _BOPTEST_TESTCASE = "bestest_hydronic"
-    _OBS_DESCRIPTION  = ["Température interieur", "Température exterieur", "normal radiation (sky cover included)","horizontal radiation","sky cover", "humidity", "elevation_soleil"]#"heur_cos", "heure_sin","saison_cos", "saison_sin"]
-    _OBS_LIST         = ["reaTRoo_y", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaHDirNor_y","weaSta_reaWeaHGloHor_y", "weaSta_reaWeaNTot_y", "weaSta_reaWeaRelHum_y", "weaSta_reaWeaSolAlt_y"]
-    _FORCAST_LIST     = ["LowerSetp[1]", "TDryBul","HDirNor","HGloHor", "nTot", "relHum", "solAlt" ]
+    _OBS_DESCRIPTION  = ["Température interieur", "temps", "Température exterieur", "normal radiation (sky cover included)","horizontal radiation","sky cover", "humidity", "elevation_soleil"]#"heur_cos", "heure_sin","saison_cos", "saison_sin"]
+    _OBS_LIST         = ["reaTRoo_y", "time", "weaSta_reaWeaTDryBul_y", "weaSta_reaWeaHDirNor_y","weaSta_reaWeaHGloHor_y", "weaSta_reaWeaNTot_y", "weaSta_reaWeaRelHum_y", "weaSta_reaWeaSolAlt_y"]
+    _FORCAST_LIST     = ["LowerSetp[1]",  "time", "TDryBul","HDirNor","HGloHor", "nTot", "relHum", "solAlt" ]
     _CTRL_LIST        = ["ovePum_u", "oveTSetSup_u"]
     _SCENARIO_LIST = {"test": [ dt.datetime(2009,1,1),dt.datetime(2009,1,11)               ], 
               "train_little": [ dt.datetime(2009,1,11),dt.datetime(2009,1,21)], 

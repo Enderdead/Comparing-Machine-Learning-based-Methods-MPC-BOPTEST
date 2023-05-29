@@ -17,6 +17,37 @@ class AbsInitializer(tf.keras.initializers.Initializer):
     return self.origin_init.get_config()
 
 
+
+class Proj(tf.keras.layers.Dense):
+    def __init__(self,connections=None, selected_index=None,  **kwargs):
+        if selected_index is None:
+            self.connections = np.array(connections)   
+            self.selected_index = None
+        else:
+            self.connections = None
+            self.selected_index = selected_index
+        self.output_dim = len(selected_index) if connections is None else self.connections.shape[-1] 
+        super(Proj,self).__init__( self.output_dim,use_bias=False )  
+
+    def build(self, input_shape):
+        if self.connections is None:
+            self.connections = np.zeros((input_shape[-1],self.output_dim), dtype=np.float32)
+            for idx, proj_idx in enumerate(self.selected_index):
+                self.connections[proj_idx, idx] = 1.0
+
+        self.kernel =  tf.constant(self.connections)
+
+
+    def call(self,inputs):
+        return super(Proj,self).call(inputs)
+
+    def get_config(self):
+
+        dense_conf = super(Proj,self).get_config()
+        dense_conf["connections"] = self.connections
+        return dense_conf
+
+
 class ResidualPartialConvexLayer(tf.keras.layers.Layer):
     def __init__(self, units, activation=None, recursive_convexity=False,  kernel_initializer='glorot_uniform'):
         super(ResidualPartialConvexLayer, self).__init__()
@@ -174,7 +205,7 @@ class PICNN():
         return result
 
     # The fonction is convex for the first nb_input_conv layer
-    def __init__(self, nb_input=2, nb_input_conv=2, nb_output=1, act_func=tf.nn.relu, nb_layer=2, units=24, recursive_convexity=False, kernel_initializer=tf.keras.initializers.GlorotUniform()):
+    def __init__(self, nb_input=2, input_conv_list=[], nb_output=1, act_func=tf.nn.relu, nb_layer=2, units=24, recursive_convexity=False, kernel_initializer=tf.keras.initializers.GlorotUniform()):
         assert nb_input>=nb_input_conv, "Please provide a nb conv input equals or less than the total input number"
         
         self.output_func = tf.identity
@@ -184,13 +215,21 @@ class PICNN():
         self.units = units
         self.nb_output = nb_output
         self.nb_input = nb_input
-        self.nb_input_conv = nb_input_conv
+        self.nb_input_conv = len(input_conv_list)
+        self.input_conv_list = input_conv_list
         self.recursive_convexity = recursive_convexity
+
+        assert min(input_conv_list)>=0, "Please provide only positive index"
+        assert max(input_conv_list)<=self.nb_input - 1, "Prease provide a valid index (out off bound index provided)"
+
 
         self.input_layer = tf.keras.layers.Input(shape=(nb_input,))
 
-        self.x_input = tf.keras.layers.Lambda(lambda x: x[:,0:self.nb_input_conv])(self.input_layer)
-        self.u_input = tf.keras.layers.Lambda(lambda x: x[:,self.nb_input_conv:])(self.input_layer)
+        self.x_input_proj = Proj(selected_index=[self.input_conv_list])#tf.keras.layers.Lambda(lambda x: x[:,0:self.nb_input_conv])(self.input_layer)
+        self.u_input_proj = Proj(selected_index=[[item for item in list(range(self.nb_input)) if item not in self.input_conv_list]   ])#tf.keras.layers.Lambda(lambda x: x[:,self.nb_input_conv:])(self.input_layer)
+        
+        self.x_input = self.x_input_proj(self.input_layer)
+        self.u_input = self.u_input_proj(self.input_layer)
         
         self.z_layers = list()
         self.u_layers = list()

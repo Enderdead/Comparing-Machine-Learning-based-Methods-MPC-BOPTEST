@@ -42,7 +42,7 @@ curr_temp = init_y[-1,:]
 # Initializing the controller
 mpc_controller = ARXMpc(MODEL_PATH, HORIZON) if args.model=="linear" else CNNMpc(MODEL_PATH, HORIZON)
 mpc_controller.reset(prev_y=init_y[:-1, :], prev_u=init_u[:, :])
-
+1/0
 
 # Setup for simulation loop
 terminated = False
