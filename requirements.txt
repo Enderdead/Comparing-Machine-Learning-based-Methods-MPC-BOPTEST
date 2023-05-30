@@ -1,0 +1,15 @@
+numpy
+tensorflow
+matplotlib
+jax
+pickle
+pandas
+scikit-learn
+progress
+scipy
+subprocess
+requests
+socket
+fuzzywuzzy
+contextlib
+pyNeuralEMPC @ git+https://github.com/Enderdead/pyNeuralEMPC@0c5c967

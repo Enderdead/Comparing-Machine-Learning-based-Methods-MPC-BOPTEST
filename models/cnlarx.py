@@ -19,25 +19,35 @@ class CNLArx():
 
     @classmethod
     def load(cls, path):
-        result = pickle.load(os.path.join(path, "obj.pickle"))
-        result.core = PICNN.load(path)
+        result = pickle.load(open(os.path.join(path, "obj.pickle"), "rb"))
+        result.core = PICNN_old.load(path)
+        return result
 
-    def __init__(self, na=3, nb=3, nb_layer=2, nb_unit=32):
+    def __init__(self, na=3, nb=3, nb_layer=2, nb_unit=24):
         self.na = na
         self.nb = nb
 
         self.scaler_y = StandardScaler()
-        self.scaler_u = StandardScaler()
+        self.scaler_u = StandardScaler(with_mean=False, with_std=False)
         self.scaler_tvp = StandardScaler()
 
         self._fitted = False
-        self.core = PICNN(nb_input=na*len(CNLArx._Y_LABEL) + nb*len(CNLArx._U_LABEL)+nb*len(CNLArx._TVP_LABEL_EXTENDED),
-                          input_conv_list=list(range(na*len(CNLArx._Y_LABEL) )),#+ nb*len(CNLArx._U_LABEL)
+        """self.core = PICNN(nb_input=na*len(CNLArx._Y_LABEL) + nb*len(CNLArx._U_LABEL)+nb*len(CNLArx._TVP_LABEL_EXTENDED),
+                          input_conv_list=[], #list(range(na*len(CNLArx._Y_LABEL)+ nb*len(CNLArx._U_LABEL) ))
                           nb_output=len(CNLArx._Y_LABEL),
                           nb_layer=nb_layer, 
                           units=nb_unit, 
-                          recursive_convexity= False)
+                          recursive_convexity= True,
+                          kernel_initializer=tf.keras.initializers.GlorotUniform())"""
 
+        self.core = PICNN_old(nb_input=na*len(CNLArx._Y_LABEL) + nb*len(CNLArx._U_LABEL)+nb*len(CNLArx._TVP_LABEL_EXTENDED),
+                          nb_input_conv=na+nb, #list(range(na*len(CNLArx._Y_LABEL)+ nb*len(CNLArx._U_LABEL) ))
+                          nb_output=len(CNLArx._Y_LABEL),
+                          nb_layer=nb_layer, 
+                          units=nb_unit, 
+                          recursive_convexity= True,
+                          kernel_initializer=tf.keras.initializers.GlorotUniform())
+        
 
     def _process_tvp(self, tvp):
         cos_t = np.cos(2.0*np.pi*tvp[:,2:3]/86400.0  )
@@ -45,7 +55,7 @@ class CNLArx():
 
         return np.concatenate([tvp[:,[0,1,3,4]], cos_t, sin_t   ], axis=1)
 
-    def train(self, dataset, nb_epoch=2000):
+    def train(self, dataset, nb_epoch=1200):
         y, u, tvp = dataset[CNLArx._Y_LABEL].values, dataset[CNLArx._U_LABEL].values, dataset[CNLArx._TVP_LABEL].values
 
         tvp = self._process_tvp(tvp)
@@ -63,9 +73,9 @@ class CNLArx():
         flat_tvp_extended = np.transpose(tvp_extended, (0,1,2)).reshape(tvp_extended.shape[0],-1)
 
         model_input  = np.concatenate([flat_y_extended, flat_u_extended, flat_tvp_extended], axis=1)
-        model_output = y_t_1
+        model_output = d_y
 
-        self.core.train( model_output, model_input, nb_epoch=nb_epoch, optimizer=tf.keras.optimizers.Adam(learning_rate=0.08))
+        self.core.train( model_output, model_input, nb_epoch=nb_epoch, optimizer=tf.keras.optimizers.Adam(learning_rate=0.008))
 
         plt.plot(model_output)
         plt.plot(self.core.core.predict(model_input))
@@ -80,6 +90,7 @@ class CNLArx():
             os.mkdir(path)
 
         pickle.dump(self, open(os.path.join(path, "obj.pickle"), "wb"))
+        self.core.save(path)
 
     def __getstate__(self):
         state = self.__dict__.copy()
