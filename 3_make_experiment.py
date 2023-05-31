@@ -19,7 +19,7 @@ parser.add_argument("-p", "--path", type=str,
                     help="The path to the model file")
 args = parser.parse_args()
 
-HORIZON = 30
+HORIZON = 12
 SAMPLING_RATE = 900
 PWM_FREQ = 3
 # Load model 
@@ -31,6 +31,7 @@ else:
     MODEL_PATH = args.path
 
 
+set_point_list = [294.5,295.5]
 
 
 # Initializing the simulation environment
@@ -49,25 +50,43 @@ progress_bar = IncrementalBar("Simulation ", suffix='%(percent)d%% [ elapsed tim
 
 
 planning_history = []
+forcast_history =  [] 
 
 # Main simulation loop
 i = 0
 forcast = init_forcast
+
+curr_relative_time = (envBoptest.t/900)%8
+target_temp = ((np.linspace(0,HORIZON-1, HORIZON) + curr_relative_time)%8<4).astype(np.float32)*(set_point_list[1] - set_point_list[0]) + set_point_list[0]
+forcast[:,0] = target_temp
+
+
+
 while not terminated:
     i += 1
     u, planning  = mpc_controller.update(curr_measurments, forcast)
     planning_history.append(planning)
-
+    forcast_history.append(forcast)
+    
     terminated, curr_measurments, forcast, info = envBoptest.step(np.array([u]))
     if terminated: continue
 
+    curr_relative_time = (envBoptest.t/900)%8
+    target_temp = ((np.linspace(0,HORIZON-1, HORIZON) + curr_relative_time)%8<4).astype(np.float32)*(set_point_list[1] - set_point_list[0]) + set_point_list[0]
+    forcast[:,0] = 295.15+  (forcast[:,0]-288.15)/(294.15-288.15)
 
     curr_temp = float(curr_measurments[0,0])
     progress_bar.next()
+    print("curr temp: ",curr_measurments[0,0],"  lim bottom : ", forcast[0,0] )
+    if i>120:
+        break
 
+
+#mpc_controller.set_cost_balance(-20.0)
+#a, b = mpc_controller.update(curr_measurments, forcast)
 # Clean up progress bar
-progress_bar.clearln()
 del progress_bar
+
 
 
 history_y = np.squeeze(np.array([ element[1] for element in envBoptest.history_y][:-1]))
@@ -75,9 +94,11 @@ history_t = np.array([ element[0] for element in envBoptest.history_y[:-1]]).res
 history_u = np.array([ element[1] for element in envBoptest.history_u])
 
 
-fig, (ax1, ax2) = plt.subplots(2,1)
+
+fig, (ax1, ax2) = plt.subplots(2,1,sharex=True)
 
 ax1.plot(history_t/86400, history_y[:,0]-273.15)
+ax1.plot(history_t/86400, np.array(forcast_history)[:,0,0]-273.15)
 
 ax2.plot(history_t/86400, history_u[:,0])
 plt.show()

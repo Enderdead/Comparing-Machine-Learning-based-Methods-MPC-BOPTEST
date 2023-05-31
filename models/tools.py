@@ -36,9 +36,9 @@ def IO_transform(y, u, tvp=None, na=2, nb=3):
     y_t   = y[offset-1:-1]
 
     if tvp is None:
-        return extended_u, extended_y, y_t_1, y_t-y_t_1
+        return extended_u, extended_y, y_t_1, y_t_1-y_t
     else:
-        return extended_y, extended_u, extended_tvp, y_t_1, y_t-y_t_1
+        return extended_y, extended_u, extended_tvp, y_t_1, y_t_1-y_t
 
 def IO_transform_jax(y, u, na=2, nb=3):
     assert y.shape[0] == u.shape[0]
@@ -50,4 +50,4 @@ def IO_transform_jax(y, u, na=2, nb=3):
     y_t_1 = y[offset:]
     y_t   = y[offset-1:-1]
 
-    return extended_u, extended_y, y_t_1,  y_t-y_t_1
+    return extended_u, extended_y, y_t_1,  y_t_1-y_t

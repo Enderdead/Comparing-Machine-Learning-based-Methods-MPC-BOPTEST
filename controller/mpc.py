@@ -84,7 +84,6 @@ class ARXMpc():
         curr_y          = self.model.scaler_y.transform(curr_y)
         tvp_horizon     = self.model.scaler_tvp.transform(tvp_horizon)
         limit_y_horizon = self.model.scaler_y.transform(limit_y_horizon)
-        print(tvp_horizon.shape)
 
         # Init problem structure
 
@@ -100,12 +99,11 @@ class ARXMpc():
 
         objective_func  =  nEMPC.objective.jax.JAXObjectifFunc(self._get_cost_func(limit_y_horizon))
 
-        optimizer = nEMPC.optimizer.Slsqp(max_iteration=350, verbose=5, tolerance=1e-3)
+        optimizer = nEMPC.optimizer.Slsqp(max_iteration=350, verbose=0, tolerance=1e-3)
 
         controller = nEMPC.controller.NMPC(integrator, objective_func, constraints_nmpc, self.horizon, 900, optimizer=optimizer, use_hessian=False)
 
         res_y, res_u = controller.next(x0=curr_y.reshape(-1), tvp=tvp_horizon)
-
 
         self.prev_y = np.concatenate([self.prev_y[1:, :], curr_y], axis=0)
         self.prev_u = np.concatenate([self.prev_u[1:, :], res_u[0:1,:]], axis=0)
@@ -124,13 +122,14 @@ class CNNMpc():
         self.prev_u   = np.array([[]])
         self.prev_y   = np.array([[]])
         self.prev_tvp = np.array([[]])
+        self.cost_u = 0.1
         self._ready = False
 
     def _get_cost_func(self, y_limit):
         
         def cost(x, u, p=None, tvp=None):
             lower_error = jax.nn.relu(y_limit - x)
-            return jnp.sum(lower_error) + 0.1*jnp.sum(u)
+            return jnp.sum(lower_error) + self.cost_u*jnp.sum(u)
             
         return cost
     
@@ -161,8 +160,8 @@ class CNNMpc():
 
         self._ready = True
     
-    def set_cost_balance(self, setpoint):
-        pass
+    def set_cost_balance(self, cost_u):
+        self.cost_u = cost_u
 
 
 

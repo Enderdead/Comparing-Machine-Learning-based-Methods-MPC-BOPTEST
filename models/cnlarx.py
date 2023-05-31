@@ -101,11 +101,23 @@ class CNLArx():
     def predict(self, y, u, tvp):
         assert self._fitted, "Please fit the model"
 
+        tvp = self._process_tvp(tvp)
+
         y, u, tvp = self.scaler_y.transform(y), self.scaler_u.transform(u), self.scaler_tvp.transform(tvp)
-        model_input = np.concatenate([y[-self.na:].reshape(-1), u[-self.nb:].reshape(-1), tvp[-self.nb:].reshape(-1)]).reshape(1,-1) 
+        print(y.shape)
+
+        y_extended, u_extended, tvp_extended, y_t_1, d_y = IO_transform(y, u, tvp=tvp, na=self.na, nb=self.nb)
+        print(d_y[0:4])
+        flat_y_extended   = np.transpose(y_extended, (0,2,1)).reshape(y_extended.shape[0]  ,-1)
+        flat_u_extended   = np.transpose(u_extended, (0,2,1)).reshape(u_extended.shape[0]  ,-1)
+        flat_tvp_extended = np.transpose(tvp_extended, (0,1,2)).reshape(tvp_extended.shape[0],-1)
+
+        model_input  = np.concatenate([flat_y_extended, flat_u_extended, flat_tvp_extended], axis=1)
+
+        #model_input = np.concatenate([y[-self.na:].reshape(-1), u[-self.nb:].reshape(-1), tvp[-self.nb:].reshape(-1)]).reshape(y.shape[0],-1) 
         pred =  self.core.core.predict(model_input)
 
-        return self.scaler_y.inverse_transform(pred)
+        return pred*self.scaler_y.scale_
 
 
 

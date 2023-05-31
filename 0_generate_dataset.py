@@ -34,7 +34,7 @@ experiment_size = (envBoptest.scenario_bound[1]-envBoptest.scenario_bound[0])/SA
 
 
 # Setpoints and controller initialization
-set_point_list = [295.5,296.5]
+set_point_list = [295.65,296.65]
 controller = PID(Kp=300.0/SAMPLING_RATE, Ki=0.0, Kd=0.0, dt=SAMPLING_RATE, setpoint=set_point_list[0])
 
 
