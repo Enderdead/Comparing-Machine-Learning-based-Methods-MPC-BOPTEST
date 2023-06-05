@@ -6,6 +6,7 @@ import subprocess
 import random
 import time
 import numpy as np
+from tools import check_if_image_exists
 from contextlib import closing
 import copy
 from fuzzywuzzy import process
@@ -97,7 +98,8 @@ class Boptest:
         self.activated_measurements = measurements_list
 
     def _start_server(self):
-        _run_command(f"docker build -t {Boptest._DOCKER_IMAGE_NAME} ./project1_boptest")
+        if not check_if_image_exists(Boptest._DOCKER_IMAGE_NAME):
+            _run_command(f"docker build -t {Boptest._DOCKER_IMAGE_NAME} ./project1_boptest")
         _run_command(f"""docker run --name {self._random_tag} \
                         --network boptest-net \
                         -e APP_PATH='/home/developer' \

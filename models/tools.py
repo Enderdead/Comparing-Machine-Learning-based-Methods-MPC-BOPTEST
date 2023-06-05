@@ -26,7 +26,7 @@ def IO_transform(y, u, tvp=None, na=2, nb=3):
         assert y.shape[0] == tvp.shape[0]
 
     # We do not use u[t] for y[t] prediction
-    offset = max(nb, na+1)
+    offset = max(nb, na)# +1 enlevé
     extended_u = np.stack([u[i-nb:i] for i in range( offset, u.shape[0])])
     extended_y = np.stack([y[i-na:i] for i in range( offset, u.shape[0])])
 

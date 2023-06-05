@@ -9,11 +9,11 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-U_LABEL=["u",]
-TVP_LABEL=["weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y","time", "weaSta_reaWeaHGloHor_y", "weaSta_reaWeaSolAlt_y"]
-y_LABEL=["reaTRoo_y"]
 
 class ArxSolar():
+    _U_LABEL   = ["u",]
+    _TVP_LABEL = ["weaSta_reaWeaTDryBul_y", "weaSta_reaWeaRelHum_y","time", "weaSta_reaWeaHGloHor_y", "weaSta_reaWeaSolAlt_y"]
+    _Y_LABEL   = ["reaTRoo_y"]
 
     @classmethod
     def load(cls, path):
@@ -25,13 +25,16 @@ class ArxSolar():
         self.na = na
         self.nb = nb
         self.n_tvert = n_tvert
-        self.core = Ridge(alpha=0.0001, fit_intercept=False)
+        self.core = Ridge(alpha=0.0000, fit_intercept=False)
 
         self.scaler_y   = StandardScaler()
         self.scaler_u   = StandardScaler(with_mean=False, with_std=False)
         self.scaler_tvp = StandardScaler() 
     
         self._fitted = False
+
+    def get_obs_size(self):
+        return max(self.na, self.nb)
 
     def _process_tvp(self, tvp):
         I_vert = tvp[:,3:4]*np.cos(np.pi/2  - tvp[:,4:5])/np.sin(np.pi/2 - tvp[:,4:5])
@@ -42,7 +45,7 @@ class ArxSolar():
         return tvp
 
     def train(self, dataset):
-        y, u, tvp = dataset[y_LABEL].values, dataset[U_LABEL].values, dataset[TVP_LABEL].values
+        y, u, tvp = dataset[ArxSolar._Y_LABEL].values, dataset[ArxSolar._U_LABEL].values, dataset[ArxSolar._TVP_LABEL].values
 
         tvp = self._process_tvp(tvp)
 
@@ -74,13 +77,22 @@ class ArxSolar():
 
     def predict(self, y, u, tvp):
         assert self._fitted, "Please fit the model"
+        if len(y.shape)==2:
+            y, u, tvp = self.scaler_y.transform(y), self.scaler_u.transform(u), self.scaler_tvp.transform(tvp)
+            model_input = np.concatenate([y[-self.na:].reshape(-1), u[-self.nb:].reshape(-1), tvp[-self.nb:].reshape(-1)]).reshape(1,-1) 
+            pred =  self.core.predict(model_input)
 
-        y, u, tvp = self.scaler_y.transform(y), self.scaler_u.transform(u), self.scaler_tvp.transform(tvp)
-        model_input = np.concatenate([y[-self.na:].reshape(-1), u[-self.nb:].reshape(-1), tvp[-self.nb:].reshape(-1)]).reshape(1,-1) 
-        pred =  self.core.predict(model_input)
+            return self.scaler_y.inverse_transform(pred)
+        if len(y.shape)==3:
+                    
+            y, u, tvp = np.array([self.scaler_y.transform(row)  for row in y]), np.array([self.scaler_u.transform(row) for row in u]), np.array([self.scaler_tvp.transform(self._process_tvp(row)) for row in tvp])
+            
+            model_input = np.concatenate([y[:,-self.na:,:].reshape( y.shape[0],-1), u[:,-self.nb:,:].reshape( u.shape[0],-1), tvp[:,-self.nb:,:].reshape( tvp.shape[0],-1)],axis=1).reshape(tvp.shape[0],-1) 
+            pred =  self.core.predict(model_input)
 
-        return self.scaler_y.inverse_transform(pred)
-
+            return self.scaler_y.inverse_transform(pred)
+        else:
+            raise RuntimeError("Not supported input vector (or dim>3)")
 
 
 

@@ -45,9 +45,14 @@ class CNLArx():
                           nb_output=len(CNLArx._Y_LABEL),
                           nb_layer=nb_layer, 
                           units=nb_unit, 
+                          act_func=tf.keras.activations.softplus,
                           recursive_convexity= True,
                           kernel_initializer=tf.keras.initializers.GlorotUniform())
         
+
+    def get_obs_size(self):
+        return max(self.na, self.nb)
+
 
     def _process_tvp(self, tvp):
         cos_t = np.cos(2.0*np.pi*tvp[:,2:3]/86400.0  )
@@ -55,7 +60,7 @@ class CNLArx():
 
         return np.concatenate([tvp[:,[0,1,3,4]], cos_t, sin_t   ], axis=1)
 
-    def train(self, dataset, nb_epoch=1200):
+    def train(self, dataset, nb_epoch=2200):
         y, u, tvp = dataset[CNLArx._Y_LABEL].values, dataset[CNLArx._U_LABEL].values, dataset[CNLArx._TVP_LABEL].values
 
         tvp = self._process_tvp(tvp)
@@ -100,28 +105,38 @@ class CNLArx():
 
     def predict(self, y, u, tvp):
         assert self._fitted, "Please fit the model"
+        if len(y.shape)==2:
+            tvp = self._process_tvp(tvp)
 
-        tvp = self._process_tvp(tvp)
+            y, u, tvp = self.scaler_y.transform(y), self.scaler_u.transform(u), self.scaler_tvp.transform(tvp)
+            print(y.shape)
 
-        y, u, tvp = self.scaler_y.transform(y), self.scaler_u.transform(u), self.scaler_tvp.transform(tvp)
-        print(y.shape)
+            y_extended, u_extended, tvp_extended, y_t_1, d_y = IO_transform(y, u, tvp=tvp, na=self.na, nb=self.nb)
+            print(d_y[0:4])
+            flat_y_extended   = np.transpose(y_extended, (0,2,1)).reshape(y_extended.shape[0]  ,-1)
+            flat_u_extended   = np.transpose(u_extended, (0,2,1)).reshape(u_extended.shape[0]  ,-1)
+            flat_tvp_extended = np.transpose(tvp_extended, (0,1,2)).reshape(tvp_extended.shape[0],-1)
 
-        y_extended, u_extended, tvp_extended, y_t_1, d_y = IO_transform(y, u, tvp=tvp, na=self.na, nb=self.nb)
-        print(d_y[0:4])
-        flat_y_extended   = np.transpose(y_extended, (0,2,1)).reshape(y_extended.shape[0]  ,-1)
-        flat_u_extended   = np.transpose(u_extended, (0,2,1)).reshape(u_extended.shape[0]  ,-1)
-        flat_tvp_extended = np.transpose(tvp_extended, (0,1,2)).reshape(tvp_extended.shape[0],-1)
+            model_input  = np.concatenate([flat_y_extended, flat_u_extended, flat_tvp_extended], axis=1)
 
-        model_input  = np.concatenate([flat_y_extended, flat_u_extended, flat_tvp_extended], axis=1)
+            #model_input = np.concatenate([y[-self.na:].reshape(-1), u[-self.nb:].reshape(-1), tvp[-self.nb:].reshape(-1)]).reshape(y.shape[0],-1) 
+            pred =  self.core.core.predict(model_input) + y[self.get_obs_size():] 
 
-        #model_input = np.concatenate([y[-self.na:].reshape(-1), u[-self.nb:].reshape(-1), tvp[-self.nb:].reshape(-1)]).reshape(y.shape[0],-1) 
-        pred =  self.core.core.predict(model_input)
+            return self.scaler_y.inverse_transform(pred)
+        elif len(y.shape)==3:
+                    
+            y, u, tvp = np.array([self.scaler_y.transform(row)  for row in y]), np.array([self.scaler_u.transform(row) for row in u]), np.array([self.scaler_tvp.transform(self._process_tvp(row)) for row in tvp])
+            
+            model_input = np.concatenate([y[:,-self.na:,:].reshape( y.shape[0],-1), u[:,-self.nb:,:].reshape( u.shape[0],-1), tvp[:,-self.nb:,:].reshape( tvp.shape[0],-1)],axis=1).reshape(tvp.shape[0],-1) 
+            pred =  self.core.core.predict(model_input) + y[:,-1] 
+            pred = pred.reshape(-1, len(CNLArx._Y_LABEL))
 
-        return pred*self.scaler_y.scale_
+            return self.scaler_y.inverse_transform(pred)
+        else:
+            raise RuntimeError("error not supported ")
 
 
-
-def train_CNLARX(dataset_pd, na=3, nb=3, nb_layer=4, units=64):
+def train_CNLARX(dataset_pd, na=3, nb=3, nb_layer=2, units=24):
     assert len(dataset_pd.dropna()) == len(dataset_pd), "NAN rows"
     
     model = CNLArx(na=na, nb=nb, nb_layer=nb_layer, nb_unit=units)

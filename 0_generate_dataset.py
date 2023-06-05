@@ -49,7 +49,7 @@ while not terminated:
     terminated, y, forcast, info = envBoptest.step(np.array([u]))
     if terminated: continue
 
-    if info["time"]%(3600*2)<3600:
+    if info["time"]%(3600*4)<3600*2:
         controller.setpoint = set_point_list[0]
     else:
         controller.setpoint = set_point_list[1]
@@ -72,7 +72,7 @@ data_columns_name = ["t", ] + ["u",] + BestestHydronicPwm._OBS_LIST
 datapd = pd.DataFrame( data=dict( zip(data_columns_name, data_raw.T)))
 datapd.set_index("t").to_csv(os.path.join("dataset", "test_set.csv"))
 
-
+1/0
 
 # Plot test set
 if PLOT:
@@ -125,7 +125,7 @@ while not terminated:
     u = controller.update(curr_temp)
     terminated, y, forcast, info = envBoptest.step(np.array([u]))
     if terminated: continue
-    if info["time"]%(3600*2)<3600:
+    if info["time"]%(3600*4)<3600*2:
         controller.setpoint = set_point_list[0]
     else:
         controller.setpoint = set_point_list[1]
@@ -133,7 +133,6 @@ while not terminated:
     progress_bar.next()
 
 # Clean up progress bar
-progress_bar.clearln()
 del progress_bar
 
 # Extraction and combination of simulation history data
@@ -152,7 +151,7 @@ datapd.set_index("t").to_csv(os.path.join("dataset", "training_full.csv"))
 # Split to medium and short training
 origin_dt =envBoptest._SCENARIO_LIST["test"][0]
 end_medium_dataset_dt = envBoptest._SCENARIO_LIST["train_medium"][1]-origin_dt
-end_little_dataset_dt = envBoptest._SCENARIO_LIST["train_little"][1]-origin_dt
+end_short_dataset_dt = envBoptest._SCENARIO_LIST["train_short"][1]-origin_dt
 
 # TODO Fix bug ratio time
 a = envBoptest._SCENARIO_LIST["train_medium"][1] - envBoptest._SCENARIO_LIST["train_medium"][0]
@@ -160,10 +159,10 @@ b = envBoptest._SCENARIO_LIST["train_big"][1] - origin_dt
 
 
 medium_datapd = datapd[datapd["t"]<=end_medium_dataset_dt.total_seconds()]
-little_datapd = datapd[datapd["t"]<=end_little_dataset_dt.total_seconds()]
+short_datapd = datapd[datapd["t"]<=end_short_dataset_dt.total_seconds()]
 
 medium_datapd.set_index("t").to_csv(os.path.join("dataset", "training_medium.csv"))
-little_datapd.set_index("t").to_csv(os.path.join("dataset", "training_little.csv"))
+short_datapd.set_index("t").to_csv(os.path.join("dataset", "training_short.csv"))
 
 
 

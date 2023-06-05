@@ -19,14 +19,14 @@ parser.add_argument("-p", "--path", type=str,
                     help="The path to the model file")
 args = parser.parse_args()
 
-HORIZON = 12
+HORIZON = 8
 SAMPLING_RATE = 900
 PWM_FREQ = 3
 # Load model 
 MODEL_PATH = None
 
 if args.path is None:
-    MODEL_PATH = os.path.join("_cache_models", "arx_model") if args.model=="linear" else  os.path.join("_cache_models", "convex_model")
+    MODEL_PATH = os.path.join("_cache_models", "arx_model_medium") if args.model=="linear" else  os.path.join("_cache_models", "convex_model_short")
 else:
     MODEL_PATH = args.path
 
@@ -35,7 +35,7 @@ set_point_list = [294.5,295.5]
 
 
 # Initializing the simulation environment
-envBoptest = BestestHydronicPwm("test", SAMPLING_RATE, PWM_FREQ, forcast_size=HORIZON)
+envBoptest = BestestHydronicPwm("test", SAMPLING_RATE, PWM_FREQ,  forcast_size=HORIZON)
 init_measurments, init_u, init_forcast  = envBoptest.reset()
 experiment_size = (envBoptest.scenario_bound[1]-envBoptest.scenario_bound[0])/SAMPLING_RATE
 curr_measurments = init_measurments[-1:,:]
@@ -67,7 +67,7 @@ while not terminated:
     u, planning  = mpc_controller.update(curr_measurments, forcast)
     planning_history.append(planning)
     forcast_history.append(forcast)
-    
+    u = 1.0 if i<10 else u
     terminated, curr_measurments, forcast, info = envBoptest.step(np.array([u]))
     if terminated: continue
 
@@ -78,8 +78,6 @@ while not terminated:
     curr_temp = float(curr_measurments[0,0])
     progress_bar.next()
     print("curr temp: ",curr_measurments[0,0],"  lim bottom : ", forcast[0,0] )
-    if i>120:
-        break
 
 
 #mpc_controller.set_cost_balance(-20.0)
@@ -96,9 +94,12 @@ history_u = np.array([ element[1] for element in envBoptest.history_u])
 
 
 fig, (ax1, ax2) = plt.subplots(2,1,sharex=True)
+ax1.set_title("Température")
+ax1.plot(history_t/86400, history_y[:,0]-273.15, label="Température mesurée")
+ax1.plot(history_t/86400, np.array(forcast_history)[:,0,0]-273.15, label="Température confort")
+ax1.set_title("Contrôle")
+ax1.legend()
 
-ax1.plot(history_t/86400, history_y[:,0]-273.15)
-ax1.plot(history_t/86400, np.array(forcast_history)[:,0,0]-273.15)
-
-ax2.plot(history_t/86400, history_u[:,0])
+ax2.plot(history_t/86400, history_u[:,0], label="u")
+ax2.legend()
 plt.show()

@@ -252,8 +252,7 @@ class PICNN():
         
         self.output_layer = ResidualPartialConvexLayer(nb_output, activation=self.output_func, recursive_convexity=self.recursive_convexity, kernel_initializer=self.kernel_initializer)
 
-        output = self.output_layer([curr_z, self.x_input, curr_u])
-
+        output = self.output_layer([curr_z, self.x_input, curr_u])/5.0
         self.strictly_positive_weight.extend(self.output_layer.get_positive_weight())
 
         self.core = tf.keras.Model(inputs=self.input_layer, outputs=output)
@@ -372,7 +371,7 @@ class PICNN_old():
         
         self.output_layer = ResidualPartialConvexLayer(nb_output, activation=self.output_func, recursive_convexity=self.recursive_convexity, kernel_initializer=self.kernel_initializer)
 
-        output = self.output_layer([curr_z, self.x_input, curr_u])
+        output = self.output_layer([curr_z, self.x_input, curr_u])/5.0
 
         self.strictly_positive_weight.extend(self.output_layer.get_positive_weight())
 

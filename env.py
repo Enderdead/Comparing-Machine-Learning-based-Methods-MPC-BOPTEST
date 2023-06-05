@@ -140,7 +140,7 @@ class BestestHydronicPwm(MpcEnv):
                                             control_list=BestestHydronicPwm._CTRL_LIST,
                                             observation_list=BestestHydronicPwm._OBS_LIST, 
                                             forcast_list= BestestHydronicPwm._FORCAST_LIST, 
-                                            regressive_period=3,
+                                            regressive_period=15,
                                             predictive_period=forcast_size, 
                                             timestep=self.timestep, 
                                             scenario_bound=[(x-BestestHydronicPwm._ORIGIN).total_seconds() for x in scenario_bound] )    
