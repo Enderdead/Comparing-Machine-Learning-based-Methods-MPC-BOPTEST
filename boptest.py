@@ -3,6 +3,7 @@ import os
 import sys
 import requests
 import subprocess
+import docker
 import random
 import time
 import numpy as np
@@ -61,16 +62,20 @@ def _try_function(function, max_attempts, delay):
 class Boptest:
     _DOCKER_IMAGE_NAME = "boptest_base_cmp"
 
-    def __init__(self, testcase_name, basename='127.0.0.1', port=None):
+    def __init__(self, testcase_name, port=None):
         assert testcase_name in _get_all_testcases()
         
-        self.port = _find_free_port() if port is None else port
+        self.port = 5000
         self.testcase_name  = testcase_name
 
-        self.url = f"http://{basename}:{self.port}"
         self._random_tag = f"boptest_base_{random.randint(0,1000)}"
 
         self._start_server()
+
+        self.ip = self._get_docker_ip()
+        if self.ip is None:
+            raise RuntimeError("Docker creation get an issue")
+        self.url = f"http://{self.ip}:{self.port}"
 
         try:
             print("wait for connection.", end="", flush=True)
@@ -97,10 +102,18 @@ class Boptest:
         assert np.all(np.array([x in self.available_measurements+["time"] for x in measurements_list]))
         self.activated_measurements = measurements_list
 
+    def _get_docker_ip(self):
+        client = docker.from_env()
+        network = client.networks.get("boptest-net")
+        for container in network.containers:
+            if container.name == self._random_tag:
+                return container.attrs["NetworkSettings"]["Networks"]["boptest-net"]["IPAddress"]
+        return None
+
     def _start_server(self):
         if not check_if_image_exists(Boptest._DOCKER_IMAGE_NAME):
             _run_command(f"docker build -t {Boptest._DOCKER_IMAGE_NAME} ./project1_boptest")
-        _run_command(f"""docker run --name {self._random_tag} \
+        _run_command(f"""docker run --rm --name {self._random_tag} \
                         --network boptest-net \
                         -e APP_PATH='/home/developer' \
                         -e TESTCASE='{self.testcase_name}'\
@@ -112,7 +125,6 @@ class Boptest:
                         -v $(pwd)/project1_boptest/data:/home/developer/data/ \
                         -v $(pwd)/project1_boptest/forecast:/home/developer/forecast/ \
                         -v $(pwd)/project1_boptest/kpis:/home/developer/kpis/ \
-                        -p 127.0.0.1:{self.port}:5000 \
                         -d \
                         {Boptest._DOCKER_IMAGE_NAME}""")
 
